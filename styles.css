@@ -213,6 +213,31 @@ h2 {
   font-weight: 650;
 }
 
+.source-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 9px;
+}
+
+.source-actions .badge {
+  margin-top: 0;
+}
+
+.raw-link {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.raw-link:hover {
+  color: var(--active);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .badge.active {
   color: var(--active);
   background: var(--active-bg);

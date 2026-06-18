@@ -10,7 +10,7 @@ This app has no backend and no build step.
 
 - `index.html` loads the page.
 - `app.js` loads `data.json`.
-- The browser fetches public XML directly from official government sources.
+- The browser fetches public XML directly from eCFR.
 - The browser parses the XML and searches records in memory.
 
 All search happens in memory in the browser.
@@ -30,17 +30,6 @@ The app uses eCFR where the list data is actually published inside Title 15, Par
   - B: `Supplement No. 7 to Part 744`, BIS Military End User List
   - L: `Supplement No. 6 to Part 744`, Unverified List
 
-### OFAC
-
-The app uses OFAC XML downloads for sanctions records.
-
-- C: OFAC SDN List:
-  `https://www.treasury.gov/ofac/downloads/sdn.xml`
-- J: EO 14032 / Chinese Military-Industrial Complex sanctions:
-  `https://www.treasury.gov/ofac/downloads/consolidated/consolidated.xml`
-
-For J, the app parses the consolidated OFAC XML and keeps records whose program list contains `CMIC-EO13959`.
-
 ## What This Can and Cannot Do
 
 This static app can use sources that meet both conditions:
@@ -52,24 +41,35 @@ Currently supported:
 
 - A: BIS Entity List
 - B: BIS Military End User List
-- C: OFAC SDN List
-- J: EO 14032 / CMIC sanctions from OFAC consolidated XML
 - L: Unverified List
 
 Currently not supported client-side:
 
+- C: OFAC SDN List
 - D: Denied Persons List
 - E: Chinese Military Companies List
 - F: Debarred Parties List
 - G: PRC Telecommunications Companies List
 - H: Military-Civil Fusion Affiliated Institutions List
 - I: PRC Semiconductor Companies List
+- J: EO 14032 / CMIC sanctions from OFAC consolidated XML
 - K: FCC Covered List
 - M: UFLPA Entity List
 - N: Biotechnology Company of Concern List
 - O: Catch-all provision
 
 Those may require a backend fetcher, a generated static data snapshot, PDF parsing, portal-specific handling, or a source-specific API that is not currently wired into this app.
+
+## OFAC Observation
+
+OFAC does publish machine-readable XML downloads for the SDN List and consolidated sanctions data:
+
+- `https://www.treasury.gov/ofac/downloads/sdn.xml`
+- `https://www.treasury.gov/ofac/downloads/consolidated/consolidated.xml`
+
+An attempted browser-only integration was retracted because the OFAC download path redirects through `sanctionslistservice.ofac.treas.gov` to signed S3 URLs. That can work from command-line tools, but it is not reliable from GitHub Pages because browser `fetch()` enforces CORS across the redirect chain.
+
+The likely future approach for OFAC is to use a scheduled GitHub Action to download the XML files into this repository, then have the static app read those checked-in snapshots locally.
 
 ## GitHub Pages
 
@@ -89,6 +89,6 @@ Then enable GitHub Pages for the repository:
 
 ## Notes
 
-The app marks supported sources as either `Live eCFR` or `Live OFAC`. The other sources remain visible but are marked `Not client-fetchable` because they are not currently wired to a browser-fetchable machine-readable source.
+The app marks supported sources as `Live eCFR`. The other sources remain visible but are marked `Not client-fetchable` because they are not currently wired to a browser-fetchable machine-readable source.
 
 Opening `index.html` directly from disk may fail in some browsers because `fetch("data.json")` is restricted under `file://`. GitHub Pages works because it serves the files over HTTPS.

@@ -7,12 +7,6 @@ const ECFR_PART_744 = {
   },
 };
 
-const OFAC = {
-  sdnUrl: "https://www.treasury.gov/ofac/downloads/sdn.xml",
-  consolidatedUrl: "https://www.treasury.gov/ofac/downloads/consolidated/consolidated.xml",
-  cmicProgram: "CMIC-EO13959",
-};
-
 const ECFR_SUPPLEMENTS = {
   A: {
     key: "BIS_ENTITY_LIST",
@@ -34,21 +28,7 @@ const ECFR_SUPPLEMENTS = {
   },
 };
 
-const OFAC_SOURCES = {
-  C: {
-    key: "OFAC_SDN_LIST",
-    sourceType: "OFAC",
-    list: "sdn",
-  },
-  J: {
-    key: "EO_14032_ANNEX",
-    sourceType: "OFAC",
-    list: "consolidated",
-    program: OFAC.cmicProgram,
-  },
-};
-
-const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS, ...OFAC_SOURCES };
+const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS };
 
 const state = {
   sources: [],
@@ -57,7 +37,6 @@ const state = {
   records: [],
   loadedAt: null,
   ecfrDate: null,
-  ofacError: null,
   error: null,
 };
 
@@ -79,7 +58,6 @@ loadAll();
 async function loadAll() {
   setLoading(true);
   state.error = null;
-  state.ofacError = null;
 
   try {
     const [sources, ecfrDate] = await Promise.all([loadSources(), loadEcfrDate()]);
@@ -88,15 +66,7 @@ async function loadAll() {
     renderSources();
     renderFilters();
 
-    const [ecfrRecords, ofacRecords] = await Promise.all([
-      loadEcfrRecords(ecfrDate, sources),
-      loadOfacRecords(sources).catch((error) => {
-        state.ofacError = error;
-        return [];
-      }),
-    ]);
-
-    state.records = [...ecfrRecords, ...ofacRecords];
+    state.records = await loadEcfrRecords(ecfrDate, sources);
     state.loadedAt = new Date();
     updateStatus();
     renderResults();
@@ -131,18 +101,6 @@ async function loadEcfrDate() {
 async function loadEcfrRecords(ecfrDate, sources) {
   const xmlText = await fetchText(ECFR_PART_744.xmlUrl(ecfrDate));
   return parseEcfrRecords(xmlText, sources);
-}
-
-async function loadOfacRecords(sources) {
-  const [sdnXml, consolidatedXml] = await Promise.all([
-    fetchText(OFAC.sdnUrl),
-    fetchText(OFAC.consolidatedUrl),
-  ]);
-
-  return [
-    ...parseOfacRecords(sdnXml, sources, "C"),
-    ...parseOfacRecords(consolidatedXml, sources, "J", OFAC.cmicProgram),
-  ];
 }
 
 async function fetchJson(url) {
@@ -220,74 +178,6 @@ function parseEcfrRecords(xmlText, sources) {
   });
 }
 
-function parseOfacRecords(xmlText, sources, letter, requiredProgram = null) {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xmlText, "application/xml");
-  const parserError = doc.querySelector("parsererror");
-  if (parserError) {
-    throw new Error("OFAC returned XML that could not be parsed.");
-  }
-
-  const config = OFAC_SOURCES[letter];
-  const source = sources.find((item) => item.letter === letter);
-  const entries = Array.from(doc.getElementsByTagNameNS("*", "sdnEntry"));
-
-  return entries.flatMap((entry) => {
-    const programs = childTexts(entry, "program");
-    if (requiredProgram && !programs.includes(requiredProgram)) {
-      return [];
-    }
-
-    const uid = childText(entry, "uid");
-    const entity = formatOfacName(entry);
-    if (!entity) {
-      return [];
-    }
-
-    const aliases = Array.from(entry.getElementsByTagNameNS("*", "aka"))
-      .map(formatOfacName)
-      .filter(Boolean);
-    const addresses = Array.from(entry.getElementsByTagNameNS("*", "address"))
-      .map(formatOfacAddress)
-      .filter(Boolean);
-    const ids = Array.from(entry.getElementsByTagNameNS("*", "id"))
-      .map(formatOfacId)
-      .filter(Boolean);
-    const remarks = childText(entry, "remarks");
-    const country = firstCountry(entry, addresses);
-    const rawText = [
-      entity,
-      childText(entry, "sdnType"),
-      programs.join(" "),
-      aliases.join(" "),
-      addresses.join(" "),
-      ids.join(" "),
-      remarks,
-    ].join(" ");
-
-    return [{
-      id: `${letter}-${uid || entity}`,
-      letter,
-      sourceKey: config.key,
-      sourceType: config.sourceType,
-      sourceName: source?.name || config.key,
-      citation: source?.citation || "",
-      sourceUrl: source?.url || "",
-      country,
-      entity,
-      licenseRequirement: "",
-      licenseReviewPolicy: "",
-      federalRegisterCitation: "",
-      programs,
-      aliases,
-      addresses,
-      ids,
-      remarks,
-      rawText,
-    }];
-  });
-}
-
 function cleanCellText(cell) {
   return Array.from(cell.childNodes)
     .map(nodeText)
@@ -312,68 +202,6 @@ function nodeText(node) {
   return Array.from(node.childNodes).map(nodeText).join(" ");
 }
 
-function childText(element, tagName) {
-  const child = element.getElementsByTagNameNS("*", tagName)[0];
-  return child ? cleanPlainText(child.textContent) : "";
-}
-
-function childTexts(element, tagName) {
-  return Array.from(element.getElementsByTagNameNS("*", tagName))
-    .map((child) => cleanPlainText(child.textContent))
-    .filter(Boolean);
-}
-
-function cleanPlainText(value) {
-  return String(value || "").replace(/\s+/g, " ").trim();
-}
-
-function formatOfacName(element) {
-  const firstName = childText(element, "firstName");
-  const lastName = childText(element, "lastName");
-  const title = childText(element, "title");
-  return [title, firstName, lastName].filter(Boolean).join(" ");
-}
-
-function formatOfacAddress(address) {
-  return [
-    childText(address, "address1"),
-    childText(address, "address2"),
-    childText(address, "address3"),
-    childText(address, "city"),
-    childText(address, "stateOrProvince"),
-    childText(address, "postalCode"),
-    childText(address, "country"),
-  ].filter(Boolean).join(", ");
-}
-
-function formatOfacId(id) {
-  const type = childText(id, "idType");
-  const number = childText(id, "idNumber");
-  const country = childText(id, "idCountry");
-
-  if (!type && !number) {
-    return "";
-  }
-
-  return [type, number, country].filter(Boolean).join(": ");
-}
-
-function firstCountry(entry, addresses) {
-  const addressCountry = Array.from(entry.getElementsByTagNameNS("*", "address"))
-    .map((address) => childText(address, "country"))
-    .find(Boolean);
-
-  if (addressCountry) {
-    return addressCountry;
-  }
-
-  const idCountry = Array.from(entry.getElementsByTagNameNS("*", "id"))
-    .map((id) => childText(id, "idCountry"))
-    .find(Boolean);
-
-  return idCountry || "";
-}
-
 function renderSources() {
   els.sourceList.innerHTML = state.sources.map((source) => {
     const config = LIVE_SOURCES[source.letter];
@@ -384,7 +212,10 @@ function renderSources() {
       <article class="source-card">
         <div class="source-citation">${escapeHtml(source.citation)}</div>
         <div class="source-name">${escapeHtml(source.name)}</div>
-        <span class="badge ${badgeClass}">${label}</span>
+        <div class="source-actions">
+          <span class="badge ${badgeClass}">${label}</span>
+          ${source.url ? `<a class="raw-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener">raw data</a>` : ""}
+        </div>
       </article>
     `;
   }).join("");
@@ -498,8 +329,7 @@ function renderField(label, value) {
 function updateStatus() {
   const date = state.ecfrDate || "unknown date";
   const loadedAt = state.loadedAt ? state.loadedAt.toLocaleTimeString() : "now";
-  const ofacNote = state.ofacError ? " OFAC data could not be loaded in this browser session." : "";
-  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR and OFAC. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.${ofacNote}`;
+  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.`;
 }
 
 function setLoading(isLoading) {
