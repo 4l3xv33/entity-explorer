@@ -7,31 +7,57 @@ const ECFR_PART_744 = {
   },
 };
 
-const SUPPLEMENTS = {
+const OFAC = {
+  sdnUrl: "https://www.treasury.gov/ofac/downloads/sdn.xml",
+  consolidatedUrl: "https://www.treasury.gov/ofac/downloads/consolidated/consolidated.xml",
+  cmicProgram: "CMIC-EO13959",
+};
+
+const ECFR_SUPPLEMENTS = {
   A: {
     key: "BIS_ENTITY_LIST",
+    sourceType: "eCFR",
     appendix: "Supplement No. 4 to Part 744",
     columns: ["country", "entity", "licenseRequirement", "licenseReviewPolicy", "federalRegisterCitation"],
   },
   B: {
     key: "BIS_MILITARY_END_USER_LIST",
+    sourceType: "eCFR",
     appendix: "Supplement No. 7 to Part 744",
     columns: ["country", "entity", "federalRegisterCitation"],
   },
   L: {
     key: "UNVERIFIED_LIST",
+    sourceType: "eCFR",
     appendix: "Supplement No. 6 to Part 744",
     columns: ["country", "entity", "federalRegisterCitation"],
   },
 };
 
+const OFAC_SOURCES = {
+  C: {
+    key: "OFAC_SDN_LIST",
+    sourceType: "OFAC",
+    list: "sdn",
+  },
+  J: {
+    key: "EO_14032_ANNEX",
+    sourceType: "OFAC",
+    list: "consolidated",
+    program: OFAC.cmicProgram,
+  },
+};
+
+const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS, ...OFAC_SOURCES };
+
 const state = {
   sources: [],
-  availableLetters: new Set(Object.keys(SUPPLEMENTS)),
-  selectedLetters: new Set(Object.keys(SUPPLEMENTS)),
+  availableLetters: new Set(Object.keys(LIVE_SOURCES)),
+  selectedLetters: new Set(Object.keys(LIVE_SOURCES)),
   records: [],
   loadedAt: null,
   ecfrDate: null,
+  ofacError: null,
   error: null,
 };
 
@@ -53,6 +79,7 @@ loadAll();
 async function loadAll() {
   setLoading(true);
   state.error = null;
+  state.ofacError = null;
 
   try {
     const [sources, ecfrDate] = await Promise.all([loadSources(), loadEcfrDate()]);
@@ -61,8 +88,15 @@ async function loadAll() {
     renderSources();
     renderFilters();
 
-    const xmlText = await fetchText(ECFR_PART_744.xmlUrl(ecfrDate));
-    state.records = parseEcfrRecords(xmlText, sources);
+    const [ecfrRecords, ofacRecords] = await Promise.all([
+      loadEcfrRecords(ecfrDate, sources),
+      loadOfacRecords(sources).catch((error) => {
+        state.ofacError = error;
+        return [];
+      }),
+    ]);
+
+    state.records = [...ecfrRecords, ...ofacRecords];
     state.loadedAt = new Date();
     updateStatus();
     renderResults();
@@ -94,6 +128,23 @@ async function loadEcfrDate() {
   return title.up_to_date_as_of;
 }
 
+async function loadEcfrRecords(ecfrDate, sources) {
+  const xmlText = await fetchText(ECFR_PART_744.xmlUrl(ecfrDate));
+  return parseEcfrRecords(xmlText, sources);
+}
+
+async function loadOfacRecords(sources) {
+  const [sdnXml, consolidatedXml] = await Promise.all([
+    fetchText(OFAC.sdnUrl),
+    fetchText(OFAC.consolidatedUrl),
+  ]);
+
+  return [
+    ...parseOfacRecords(sdnXml, sources, "C"),
+    ...parseOfacRecords(consolidatedXml, sources, "J", OFAC.cmicProgram),
+  ];
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -118,7 +169,7 @@ function parseEcfrRecords(xmlText, sources) {
     throw new Error("eCFR returned XML that could not be parsed.");
   }
 
-  return Object.entries(SUPPLEMENTS).flatMap(([letter, config]) => {
+  return Object.entries(ECFR_SUPPLEMENTS).flatMap(([letter, config]) => {
     const source = sources.find((item) => item.letter === letter);
     const appendix = Array.from(doc.querySelectorAll("DIV9"))
       .find((node) => node.getAttribute("N") === config.appendix);
@@ -149,6 +200,7 @@ function parseEcfrRecords(xmlText, sources) {
         id: `${letter}-${index}`,
         letter,
         sourceKey: config.key,
+        sourceType: config.sourceType,
         sourceName: source?.name || config.key,
         citation: source?.citation || "",
         sourceUrl: source?.url || "",
@@ -157,9 +209,82 @@ function parseEcfrRecords(xmlText, sources) {
         licenseRequirement: rowData.licenseRequirement || "",
         licenseReviewPolicy: rowData.licenseReviewPolicy || "",
         federalRegisterCitation: rowData.federalRegisterCitation || "",
+        programs: [],
+        aliases: [],
+        addresses: [],
+        ids: [],
+        remarks: "",
         rawText: Object.values(rowData).join(" "),
       }];
     });
+  });
+}
+
+function parseOfacRecords(xmlText, sources, letter, requiredProgram = null) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
+  const parserError = doc.querySelector("parsererror");
+  if (parserError) {
+    throw new Error("OFAC returned XML that could not be parsed.");
+  }
+
+  const config = OFAC_SOURCES[letter];
+  const source = sources.find((item) => item.letter === letter);
+  const entries = Array.from(doc.getElementsByTagNameNS("*", "sdnEntry"));
+
+  return entries.flatMap((entry) => {
+    const programs = childTexts(entry, "program");
+    if (requiredProgram && !programs.includes(requiredProgram)) {
+      return [];
+    }
+
+    const uid = childText(entry, "uid");
+    const entity = formatOfacName(entry);
+    if (!entity) {
+      return [];
+    }
+
+    const aliases = Array.from(entry.getElementsByTagNameNS("*", "aka"))
+      .map(formatOfacName)
+      .filter(Boolean);
+    const addresses = Array.from(entry.getElementsByTagNameNS("*", "address"))
+      .map(formatOfacAddress)
+      .filter(Boolean);
+    const ids = Array.from(entry.getElementsByTagNameNS("*", "id"))
+      .map(formatOfacId)
+      .filter(Boolean);
+    const remarks = childText(entry, "remarks");
+    const country = firstCountry(entry, addresses);
+    const rawText = [
+      entity,
+      childText(entry, "sdnType"),
+      programs.join(" "),
+      aliases.join(" "),
+      addresses.join(" "),
+      ids.join(" "),
+      remarks,
+    ].join(" ");
+
+    return [{
+      id: `${letter}-${uid || entity}`,
+      letter,
+      sourceKey: config.key,
+      sourceType: config.sourceType,
+      sourceName: source?.name || config.key,
+      citation: source?.citation || "",
+      sourceUrl: source?.url || "",
+      country,
+      entity,
+      licenseRequirement: "",
+      licenseReviewPolicy: "",
+      federalRegisterCitation: "",
+      programs,
+      aliases,
+      addresses,
+      ids,
+      remarks,
+      rawText,
+    }];
   });
 }
 
@@ -187,11 +312,73 @@ function nodeText(node) {
   return Array.from(node.childNodes).map(nodeText).join(" ");
 }
 
+function childText(element, tagName) {
+  const child = element.getElementsByTagNameNS("*", tagName)[0];
+  return child ? cleanPlainText(child.textContent) : "";
+}
+
+function childTexts(element, tagName) {
+  return Array.from(element.getElementsByTagNameNS("*", tagName))
+    .map((child) => cleanPlainText(child.textContent))
+    .filter(Boolean);
+}
+
+function cleanPlainText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function formatOfacName(element) {
+  const firstName = childText(element, "firstName");
+  const lastName = childText(element, "lastName");
+  const title = childText(element, "title");
+  return [title, firstName, lastName].filter(Boolean).join(" ");
+}
+
+function formatOfacAddress(address) {
+  return [
+    childText(address, "address1"),
+    childText(address, "address2"),
+    childText(address, "address3"),
+    childText(address, "city"),
+    childText(address, "stateOrProvince"),
+    childText(address, "postalCode"),
+    childText(address, "country"),
+  ].filter(Boolean).join(", ");
+}
+
+function formatOfacId(id) {
+  const type = childText(id, "idType");
+  const number = childText(id, "idNumber");
+  const country = childText(id, "idCountry");
+
+  if (!type && !number) {
+    return "";
+  }
+
+  return [type, number, country].filter(Boolean).join(": ");
+}
+
+function firstCountry(entry, addresses) {
+  const addressCountry = Array.from(entry.getElementsByTagNameNS("*", "address"))
+    .map((address) => childText(address, "country"))
+    .find(Boolean);
+
+  if (addressCountry) {
+    return addressCountry;
+  }
+
+  const idCountry = Array.from(entry.getElementsByTagNameNS("*", "id"))
+    .map((id) => childText(id, "idCountry"))
+    .find(Boolean);
+
+  return idCountry || "";
+}
+
 function renderSources() {
   els.sourceList.innerHTML = state.sources.map((source) => {
-    const isEcfr = state.availableLetters.has(source.letter);
-    const label = isEcfr ? "Live eCFR" : "Not client-fetchable";
-    const badgeClass = isEcfr ? "active" : "inactive";
+    const config = LIVE_SOURCES[source.letter];
+    const label = config ? `Live ${config.sourceType}` : "Not client-fetchable";
+    const badgeClass = config ? "active" : "inactive";
 
     return `
       <article class="source-card">
@@ -234,14 +421,7 @@ function renderResults() {
   const searchable = state.records.filter((record) => state.selectedLetters.has(record.letter));
   const results = terms.length
     ? searchable.filter((record) => {
-        const haystack = [
-          record.sourceName,
-          record.country,
-          record.entity,
-          record.licenseRequirement,
-          record.licenseReviewPolicy,
-          record.federalRegisterCitation,
-        ].join(" ").toLowerCase();
+        const haystack = searchableText(record);
 
         return terms.every((term) => haystack.includes(term));
       })
@@ -250,13 +430,13 @@ function renderResults() {
   els.recordCount.textContent = `${state.records.length.toLocaleString()} records`;
 
   if (!state.records.length && !state.error) {
-    els.resultsList.innerHTML = '<div class="empty">Loading eCFR records...</div>';
+    els.resultsList.innerHTML = '<div class="empty">Loading records...</div>';
     return;
   }
 
   if (!query) {
     els.resultsList.innerHTML = `
-      <div class="empty">Showing the first ${Math.min(50, searchable.length)} records. Enter a query to search all loaded eCFR records.</div>
+      <div class="empty">Showing the first ${Math.min(50, searchable.length)} records. Enter a query to search all loaded records.</div>
       ${results.map(renderRecord).join("")}
     `;
     return;
@@ -270,6 +450,22 @@ function renderResults() {
   els.resultsList.innerHTML = results.slice(0, 100).map(renderRecord).join("");
 }
 
+function searchableText(record) {
+  return [
+    record.sourceName,
+    record.country,
+    record.entity,
+    record.licenseRequirement,
+    record.licenseReviewPolicy,
+    record.federalRegisterCitation,
+    record.programs?.join(" "),
+    record.aliases?.join(" "),
+    record.addresses?.join(" "),
+    record.ids?.join(" "),
+    record.remarks,
+  ].join(" ").toLowerCase();
+}
+
 function renderRecord(record) {
   return `
     <article class="result-card">
@@ -280,6 +476,11 @@ function renderRecord(record) {
       </div>
       <div class="result-title">${escapeHtml(record.entity)}</div>
       <div class="result-fields">
+        ${renderField("Programs", record.programs?.join(", "))}
+        ${renderField("Aliases", record.aliases?.slice(0, 8).join("; "))}
+        ${renderField("Addresses", record.addresses?.slice(0, 5).join("; "))}
+        ${renderField("IDs", record.ids?.slice(0, 8).join("; "))}
+        ${renderField("Remarks", record.remarks)}
         ${renderField("License requirement", record.licenseRequirement)}
         ${renderField("Review policy", record.licenseReviewPolicy)}
         ${renderField("Federal Register", record.federalRegisterCitation)}
@@ -299,7 +500,8 @@ function renderField(label, value) {
 function updateStatus() {
   const date = state.ecfrDate || "unknown date";
   const loadedAt = state.loadedAt ? state.loadedAt.toLocaleTimeString() : "now";
-  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR Title 15 Part 744, current as of ${date}. Last refreshed ${loadedAt}.`;
+  const ofacNote = state.ofacError ? " OFAC data could not be loaded in this browser session." : "";
+  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR and OFAC. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.${ofacNote}`;
 }
 
 function setLoading(isLoading) {
