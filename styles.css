@@ -30,7 +30,7 @@ input {
 }
 
 .shell {
-  width: min(1180px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 32px));
   margin: 0 auto;
   padding: 28px 0 44px;
 }
@@ -78,6 +78,17 @@ h2 {
   opacity: 0.65;
 }
 
+.app-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.main-column {
+  min-width: 0;
+}
+
 .sources,
 .search-panel {
   background: var(--panel);
@@ -88,16 +99,22 @@ h2 {
   margin-bottom: 16px;
 }
 
+.sources {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+
 .source-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 10px;
 }
 
 .source-card {
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 10px;
+  padding: 9px;
   min-width: 0;
 }
 
@@ -263,5 +280,15 @@ h2 {
 
   #refreshButton {
     width: 100%;
+  }
+
+  .app-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .sources {
+    position: static;
+    max-height: none;
   }
 }

@@ -3,39 +3,43 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Restricted Entity Search</title>
+    <title>Entity Explorer</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main class="shell">
       <section class="topbar">
         <div>
-          <h1>Restricted Entity Search</h1>
+          <h1>Entity Explorer</h1>
           <p id="statusText">Loading source registry...</p>
         </div>
         <button id="refreshButton" type="button">Refresh</button>
       </section>
 
-      <section class="sources" aria-labelledby="sourcesHeading">
-        <h2 id="sourcesHeading">Sources</h2>
-        <div id="sourceList" class="source-list"></div>
-      </section>
+      <div class="app-layout">
+        <aside class="sources" aria-labelledby="sourcesHeading">
+          <h2 id="sourcesHeading">Sources</h2>
+          <div id="sourceList" class="source-list"></div>
+        </aside>
 
-      <section class="search-panel" aria-labelledby="searchHeading">
-        <div class="search-head">
-          <h2 id="searchHeading">Search</h2>
-          <span id="recordCount">0 records</span>
+        <div class="main-column">
+          <section class="search-panel" aria-labelledby="searchHeading">
+            <div class="search-head">
+              <h2 id="searchHeading">Search</h2>
+              <span id="recordCount">0 records</span>
+            </div>
+            <label class="search-box">
+              <span>Query</span>
+              <input id="searchInput" type="search" placeholder="Huawei, ZTE, Xinjiang, AVIC" autocomplete="off">
+            </label>
+            <div id="sourceFilters" class="filters"></div>
+          </section>
+
+          <section class="results" aria-live="polite">
+            <div id="resultsList"></div>
+          </section>
         </div>
-        <label class="search-box">
-          <span>Query</span>
-          <input id="searchInput" type="search" placeholder="Huawei, ZTE, Xinjiang, AVIC" autocomplete="off">
-        </label>
-        <div id="sourceFilters" class="filters"></div>
-      </section>
-
-      <section class="results" aria-live="polite">
-        <div id="resultsList"></div>
-      </section>
+      </div>
     </main>
 
     <script src="app.js"></script>

@@ -1,4 +1,6 @@
-# Restricted Entity Search
+# Entity Explorer
+
+https://4l3xv33.github.io/entity-explorer/
 
 Static GitHub Pages app for searching the eCFR-backed lists in `data.json`.
 
@@ -40,4 +42,3 @@ Then enable GitHub Pages for the repository:
 The app marks only eCFR-backed sources as `Live eCFR`. The other sources remain visible but are marked `Not client-fetchable` because they do not currently have equivalent eCFR-hosted list data.
 
 Opening `index.html` directly from disk may fail in some browsers because `fetch("data.json")` is restricted under `file://`. GitHub Pages works because it serves the files over HTTPS.
-
