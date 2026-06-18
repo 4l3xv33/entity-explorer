@@ -382,10 +382,8 @@ function renderSources() {
 
     return `
       <article class="source-card">
-        <div class="source-title">
-          <span class="letter">${escapeHtml(source.letter)}</span>
-          <span class="source-name">${escapeHtml(source.name)}</span>
-        </div>
+        <div class="source-citation">${escapeHtml(source.citation)}</div>
+        <div class="source-name">${escapeHtml(source.name)}</div>
         <span class="badge ${badgeClass}">${label}</span>
       </article>
     `;
@@ -436,7 +434,7 @@ function renderResults() {
 
   if (!query) {
     els.resultsList.innerHTML = `
-      <div class="empty">Showing the first ${Math.min(50, searchable.length)} records. Enter a query to search all loaded records.</div>
+      <div class="empty">Showing the first ${Math.min(50, searchable.length)} records. Enter a query to search across entities.</div>
       ${results.map(renderRecord).join("")}
     `;
     return;
