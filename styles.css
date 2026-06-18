@@ -1,0 +1,267 @@
+:root {
+  color-scheme: light;
+  --bg: #f5f7f8;
+  --panel: #ffffff;
+  --text: #1b2528;
+  --muted: #617174;
+  --line: #d8e0e2;
+  --active: #0f6b5f;
+  --active-bg: #e3f4f0;
+  --inactive: #7b5b00;
+  --inactive-bg: #fff4cc;
+  --error: #9f2d20;
+  --shadow: 0 1px 2px rgba(20, 32, 35, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.shell {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 44px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 28px;
+  line-height: 1.15;
+}
+
+h2 {
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+
+#statusText {
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+#refreshButton {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+#refreshButton:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.sources,
+.search-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.source-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+}
+
+.source-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  min-width: 0;
+}
+
+.source-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.letter {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #e8edf0;
+  font-weight: 700;
+}
+
+.source-name {
+  overflow-wrap: anywhere;
+  font-weight: 650;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-top: 9px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.badge.active {
+  color: var(--active);
+  background: var(--active-bg);
+}
+
+.badge.inactive {
+  color: var(--inactive);
+  background: var(--inactive-bg);
+}
+
+.search-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+#recordCount {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.search-box {
+  display: grid;
+  gap: 6px;
+}
+
+.search-box span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+#searchInput {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fbfcfc;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: #fbfcfc;
+  cursor: pointer;
+}
+
+.filter input {
+  margin: 0;
+}
+
+.results {
+  margin-top: 14px;
+}
+
+.result-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.result-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+}
+
+.result-fields {
+  display: grid;
+  gap: 6px;
+  color: #334044;
+}
+
+.field-label {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.empty,
+.error {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 18px;
+  color: var(--muted);
+}
+
+.error {
+  color: var(--error);
+  border-color: #e9b7ae;
+}
+
+@media (max-width: 680px) {
+  .shell {
+    width: min(100% - 20px, 1180px);
+    padding-top: 18px;
+  }
+
+  .topbar {
+    display: grid;
+  }
+
+  #refreshButton {
+    width: 100%;
+  }
+}

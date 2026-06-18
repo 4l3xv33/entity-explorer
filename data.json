@@ -1,0 +1,113 @@
+{
+  "SIRA_Act_Section_2_e_3": [
+    {
+      "letter": "A",
+      "citation": "SIRA \u00a7 2(e)(3)(A)",
+      "name": "BIS Entity List",
+      "statutory_text": "The Department of Commerce Bureau of Industry and Security Entity List (Supplement No. 4 to Part 744 of the Export Administration Regulations).",
+      "url": "https://www.ecfr.gov/current/title-15/subtitle-B/chapter-VII/subchapter-C/part-744/appendix-Supplement%20No.%204%20to%20Part%20744"
+    },
+    {
+      "letter": "B",
+      "citation": "SIRA \u00a7 2(e)(3)(B)",
+      "name": "BIS Military End User List",
+      "statutory_text": "The Department of Commerce Bureau of Industry and Security Military End User List.",
+      "url": "https://www.ecfr.gov/current/title-15/subtitle-B/chapter-VII/subchapter-C/part-744/appendix-Supplement%20No.%207%20to%20Part%20744"
+    },
+    {
+      "letter": "C",
+      "citation": "SIRA \u00a7 2(e)(3)(C)",
+      "name": "OFAC SDN List",
+      "statutory_text": "The Department of the Treasury Office of Foreign Assets Control Specially Designated Nationals List.",
+      "url": "https://sanctionssearch.ofac.treas.gov/"
+    },
+    {
+      "letter": "D",
+      "citation": "SIRA \u00a7 2(e)(3)(D)",
+      "name": "Denied Persons List",
+      "statutory_text": "The Denied Persons List maintained by the Bureau of Industry and Security of the Department of Commerce and described in section 764.3(a)(2) of the Export Administration Regulations.",
+      "url": "https://www.bis.gov/licensing/end-user-guidance/denied-persons-list"
+    },
+    {
+      "letter": "E",
+      "citation": "SIRA \u00a7 2(e)(3)(E)",
+      "name": "Chinese Military Companies List",
+      "statutory_text": "The Department of Defense Chinese Military Companies List maintained pursuant to section 1260H of the National Defense Authorization Act for Fiscal Year 2021 (10 U.S.C. 113 note).",
+      "url": "https://www.defense.gov/Spotlights/Chinese-Military-Companies/"
+    },
+    {
+      "letter": "F",
+      "citation": "SIRA \u00a7 2(e)(3)(F)",
+      "name": "Debarred Parties List",
+      "statutory_text": "The Debarred Parties List maintained by the Directorate of Defense Trade Controls of the Department of State.",
+      "url": "https://www.pmddtc.state.gov/ddtc_public?id=ddtc_public_portal_debarred_list"
+    },
+    {
+      "letter": "G",
+      "citation": "SIRA \u00a7 2(e)(3)(G)",
+      "name": "PRC Telecommunications Companies List",
+      "statutory_text": "The list of telecommunications companies of the People's Republic of China designated under section 889 of the John S. McCain National Defense Authorization Act for Fiscal Year 2019 (Public Law 115\u2013232) as posing national security risks to the United States.",
+      "url": "https://www.fcc.gov/supplychain/coveredlist"
+    },
+    {
+      "letter": "H",
+      "citation": "SIRA \u00a7 2(e)(3)(H)",
+      "name": "Military-Civil Fusion Affiliated Institutions List",
+      "statutory_text": "The list of institutions of higher education and other entities determined to be affiliated with, or supporting, the People's Republic of China's military-civil fusion strategy maintained pursuant to section 1286 of the John S. McCain National Defense Authorization Act for Fiscal Year 2019 (10 U.S.C. 2358 note).",
+      "url": null,
+      "notes": "No central public list identified."
+    },
+    {
+      "letter": "I",
+      "citation": "SIRA \u00a7 2(e)(3)(I)",
+      "name": "PRC Semiconductor Companies List",
+      "statutory_text": "The list of semiconductor companies of the People's Republic of China and affiliates designated under section 5949 of the James M. Inhofe National Defense Authorization Act for Fiscal Year 2023 (Public Law 117\u2013263; 41 U.S.C. 4713 note) as posing national security risks to the United States.",
+      "url": null,
+      "notes": "No dedicated public list page identified."
+    },
+    {
+      "letter": "J",
+      "citation": "SIRA \u00a7 2(e)(3)(J)",
+      "name": "EO 14032 Annex",
+      "statutory_text": "The Annex to Executive Order (EO) 14032, 'Addressing the Threat from Securities Investments That Finance Certain Companies of the People's Republic of China,' dated June 3, 2021, or superseding Executive Order.",
+      "url": "https://ofac.treasury.gov/sanctions-programs-and-country-information/chinese-military-industrial-complex-sanctions"
+    },
+    {
+      "letter": "K",
+      "citation": "SIRA \u00a7 2(e)(3)(K)",
+      "name": "FCC Covered List",
+      "statutory_text": "The list maintained by the Federal Communications Commission of equipment and services covered by section 2 of the Secure and Trusted Communications Networks Act of 2019 (47 U.S.C. 1601; commonly referred to as the 'FCC Covered List').",
+      "url": "https://www.fcc.gov/supplychain/coveredlist"
+    },
+    {
+      "letter": "L",
+      "citation": "SIRA \u00a7 2(e)(3)(L)",
+      "name": "Unverified List",
+      "statutory_text": "Any foreign entity included on the Department of Commerce Unverified List.",
+      "url": "https://www.ecfr.gov/current/title-15/subtitle-B/chapter-VII/subchapter-C/part-744/appendix-Supplement%20No.%206%20to%20Part%20744"
+    },
+    {
+      "letter": "M",
+      "citation": "SIRA \u00a7 2(e)(3)(M)",
+      "name": "UFLPA Entity List",
+      "statutory_text": "The Uyghur Forced Labor Prevention Act Entity List maintained by the Forced Labor Enforcement Task Force pursuant to section 2(d)(2)(B) of the Uyghur Forced Labor Prevention Act (Public Law 117\u201378).",
+      "url": "https://www.dhs.gov/uflpa-entity-list"
+    },
+    {
+      "letter": "N",
+      "citation": "SIRA \u00a7 2(e)(3)(N)",
+      "name": "Biotechnology Company of Concern List",
+      "statutory_text": "The list of biotechnology company of concern pursuant to section 851 of the National Defense Authorization Act for Fiscal Year 2026 (Public Law 119\u201360).",
+      "url": null,
+      "notes": "No dedicated public list page identified."
+    },
+    {
+      "letter": "O",
+      "citation": "SIRA \u00a7 2(e)(3)(O)",
+      "name": "Other Designated Restricted Entity Lists",
+      "statutory_text": "Any other entity list designated by the President, the Secretary of Commerce, the Secretary of the Treasury, or the Secretary of Defense as restricting or prohibiting transactions with foreign entities for national security, foreign policy, or human rights reasons.",
+      "url": null,
+      "notes": "Catch-all provision rather than a specific list."
+    }
+  ]
+}
