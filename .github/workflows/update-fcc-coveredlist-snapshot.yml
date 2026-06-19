@@ -1,0 +1,62 @@
+name: Update FCC Covered List snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "9 10 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-fcc-coveredlist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download FCC Covered List HTML
+        run: |
+          set -euo pipefail
+          mkdir -p data/snapshots
+
+          node --input-type=module <<'NODE'
+          import { writeFile } from "node:fs/promises";
+
+          const url = "https://www.fcc.gov/supplychain/coveredlist";
+          const response = await fetch(url, {
+            headers: {
+              "accept": "text/html",
+              "user-agent": "Mozilla/5.0 Entity Explorer snapshot updater"
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error(`${url} returned HTTP ${response.status}`);
+          }
+
+          const html = await response.text();
+          if (!html.includes("Covered Equipment or Services")) {
+            throw new Error("FCC Covered List table marker was not found.");
+          }
+
+          await writeFile("data/snapshots/fcc-coveredlist.html", html);
+          await writeFile("data/snapshots/fcc-coveredlist-source-url.txt", `${url}\n`);
+          NODE
+
+      - name: Commit snapshot if changed
+        run: |
+          if git diff --quiet -- \
+            data/snapshots/fcc-coveredlist.html \
+            data/snapshots/fcc-coveredlist-source-url.txt; then
+            echo "No FCC Covered List snapshot changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            data/snapshots/fcc-coveredlist.html \
+            data/snapshots/fcc-coveredlist-source-url.txt
+          git commit -m "Update FCC Covered List snapshot"
+          git push

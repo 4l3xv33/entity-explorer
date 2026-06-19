@@ -16,6 +16,7 @@ const SNAPSHOTS = {
   dplUrl: "data/snapshots/dpl.csv",
   ddtcStatutoryDebarredUrl: "data/snapshots/ddtc-debarred-statutory.csv",
   ddtcAdministrativeDebarredUrl: "data/snapshots/ddtc-debarred-administrative.csv",
+  fccCoveredListUrl: "data/snapshots/fcc-coveredlist.html",
 };
 
 const ECFR_SUPPLEMENTS = {
@@ -62,6 +63,11 @@ const SNAPSHOT_SOURCES = {
     key: "DEBARRED_PARTIES_LIST",
     sourceType: "Snapshot",
     url: SNAPSHOTS.ddtcStatutoryDebarredUrl,
+  },
+  G: {
+    key: "PRC_TELECOMMUNICATIONS_COMPANIES_LIST",
+    sourceType: "Snapshot",
+    url: SNAPSHOTS.fccCoveredListUrl,
   },
 };
 
@@ -169,13 +175,14 @@ async function loadOfacApiRecords(sources) {
 }
 
 async function loadSnapshotRecords(sources) {
-  const [dplRecords, statutoryDebarredRecords, administrativeDebarredRecords] = await Promise.all([
+  const [dplRecords, statutoryDebarredRecords, administrativeDebarredRecords, fccCoveredRecords] = await Promise.all([
     loadSnapshotSource(SNAPSHOTS.dplUrl, (csvText) => parseDplCsv(csvText, sources)),
     loadSnapshotSource(SNAPSHOTS.ddtcStatutoryDebarredUrl, (csvText) => parseDdtcStatutoryDebarredCsv(csvText, sources)),
     loadSnapshotSource(SNAPSHOTS.ddtcAdministrativeDebarredUrl, (csvText) => parseDdtcAdministrativeDebarredCsv(csvText, sources)),
+    loadSnapshotSource(SNAPSHOTS.fccCoveredListUrl, (htmlText) => parseFccCoveredListHtml(htmlText, sources)),
   ]);
 
-  return [...dplRecords, ...statutoryDebarredRecords, ...administrativeDebarredRecords];
+  return [...dplRecords, ...statutoryDebarredRecords, ...administrativeDebarredRecords, ...fccCoveredRecords];
 }
 
 async function loadSnapshotSource(url, parseRecords) {
@@ -470,6 +477,78 @@ function parseDdtcAdministrativeDebarredCsv(csvText, sources) {
       rawText: [entity, date, chargingLetter, debarmentOrder, federalRegisterCitation].join(" "),
     }];
   });
+}
+
+function parseFccCoveredListHtml(htmlText, sources) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlText, "text/html");
+  const source = sources.find((item) => item.letter === "G");
+  const heading = Array.from(doc.querySelectorAll("h3"))
+    .find((item) => cleanPlainText(item.textContent) === "Covered List");
+  const table = heading ? nextElementByTag(heading, "TABLE") : doc.querySelector(".page__body table");
+  if (!table) {
+    return [];
+  }
+
+  return Array.from(table.querySelectorAll("tbody tr")).flatMap((row, index) => {
+    const cells = Array.from(row.children).filter((cell) => cell.tagName === "TD");
+    if (cells.length < 2) {
+      return [];
+    }
+
+    const description = cleanCellText(cells[0]);
+    const dateOfInclusion = cleanCellText(cells[1]);
+    const entity = fccCoveredEntityName(cells[0], description);
+    if (!entity || !description) {
+      return [];
+    }
+
+    return [{
+      id: `G-${index}`,
+      letter: "G",
+      sourceKey: "PRC_TELECOMMUNICATIONS_COMPANIES_LIST",
+      sourceType: "Snapshot",
+      sourceName: source?.name || "PRC Telecommunications Companies List",
+      citation: source?.citation || "",
+      sourceUrl: SNAPSHOTS.fccCoveredListUrl,
+      country: "",
+      entity,
+      licenseRequirement: "",
+      licenseReviewPolicy: "",
+      federalRegisterCitation: "",
+      programs: ["FCC Covered List"],
+      aliases: [],
+      addresses: [],
+      ids: [],
+      remarks: dateOfInclusion ? `Date of inclusion: ${dateOfInclusion}` : "",
+      rawText: [entity, description, dateOfInclusion].join(" "),
+    }];
+  });
+}
+
+function fccCoveredEntityName(cell, description) {
+  const namedEntities = Array.from(cell.querySelectorAll("strong"))
+    .map(cleanCellText)
+    .filter(Boolean);
+  if (namedEntities.length) {
+    return namedEntities.join("; ");
+  }
+
+  return description
+    .split(/\s+(?:produced|provided|supplied)\s+(?:by|in)\s+| —| - /)[0]
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nextElementByTag(element, tagName) {
+  let current = element.nextElementSibling;
+  while (current) {
+    if (current.tagName === tagName) {
+      return current;
+    }
+    current = current.nextElementSibling;
+  }
+  return null;
 }
 
 function parseCsv(csvText) {
