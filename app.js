@@ -14,6 +14,8 @@ const OFAC_API = {
 
 const SNAPSHOTS = {
   dplUrl: "data/snapshots/dpl.csv",
+  ddtcStatutoryDebarredUrl: "data/snapshots/ddtc-debarred-statutory.csv",
+  ddtcAdministrativeDebarredUrl: "data/snapshots/ddtc-debarred-administrative.csv",
 };
 
 const ECFR_SUPPLEMENTS = {
@@ -55,6 +57,11 @@ const SNAPSHOT_SOURCES = {
     key: "DENIED_PERSONS_LIST",
     sourceType: "Snapshot",
     url: SNAPSHOTS.dplUrl,
+  },
+  F: {
+    key: "DEBARRED_PARTIES_LIST",
+    sourceType: "Snapshot",
+    url: SNAPSHOTS.ddtcStatutoryDebarredUrl,
   },
 };
 
@@ -162,8 +169,22 @@ async function loadOfacApiRecords(sources) {
 }
 
 async function loadSnapshotRecords(sources) {
-  const dplCsv = await fetchText(SNAPSHOTS.dplUrl);
-  return parseDplCsv(dplCsv, sources);
+  const [dplRecords, statutoryDebarredRecords, administrativeDebarredRecords] = await Promise.all([
+    loadSnapshotSource(SNAPSHOTS.dplUrl, (csvText) => parseDplCsv(csvText, sources)),
+    loadSnapshotSource(SNAPSHOTS.ddtcStatutoryDebarredUrl, (csvText) => parseDdtcStatutoryDebarredCsv(csvText, sources)),
+    loadSnapshotSource(SNAPSHOTS.ddtcAdministrativeDebarredUrl, (csvText) => parseDdtcAdministrativeDebarredCsv(csvText, sources)),
+  ]);
+
+  return [...dplRecords, ...statutoryDebarredRecords, ...administrativeDebarredRecords];
+}
+
+async function loadSnapshotSource(url, parseRecords) {
+  try {
+    return parseRecords(await fetchText(url));
+  } catch (error) {
+    state.snapshotError = error;
+    return [];
+  }
 }
 
 async function fetchJson(url) {
@@ -345,6 +366,108 @@ function parseDplCsv(csvText, sources) {
       ids: [],
       remarks,
       rawText: [entity, effectiveDate, expirationDate, federalRegisterCitation, typeOfDenial].join(" "),
+    }];
+  });
+}
+
+function parseDdtcStatutoryDebarredCsv(csvText, sources) {
+  const source = sources.find((item) => item.letter === "F");
+  const rows = parseCsv(csvText.replace(/^\uFEFF/, ""));
+  const [header, ...dataRows] = rows;
+  if (!header?.length) {
+    return [];
+  }
+
+  const indexes = Object.fromEntries(header.map((name, index) => [name, index]));
+
+  return dataRows.flatMap((row, index) => {
+    const entity = cleanPlainText(row[indexes["Party Name"]]);
+    if (!entity) {
+      return [];
+    }
+
+    const dateOfBirth = cleanPlainText(row[indexes["Date Of Birth"]]);
+    const federalRegisterCitation = cleanPlainText(row[indexes["Federal Register Notice"]]);
+    const noticeDate = cleanPlainText(row[indexes["Notice Date"]]);
+    const correctedNotice = cleanPlainText(row[indexes["Corrected Notice"]]);
+    const correctedNoticeDate = cleanPlainText(row[indexes["Corrected Notice Date"]]);
+    const remarks = [
+      "Statutory debarment",
+      dateOfBirth ? `DOB: ${dateOfBirth}` : "",
+      noticeDate ? `Notice date: ${noticeDate}` : "",
+      correctedNotice ? `Corrected notice: ${correctedNotice}` : "",
+      correctedNoticeDate ? `Corrected notice date: ${correctedNoticeDate}` : "",
+    ].filter(Boolean).join("; ");
+
+    return [{
+      id: `F-statutory-${index}`,
+      letter: "F",
+      sourceKey: "DEBARRED_PARTIES_LIST",
+      sourceType: "Snapshot",
+      sourceName: source?.name || "Debarred Parties List",
+      citation: source?.citation || "",
+      sourceUrl: SNAPSHOTS.ddtcStatutoryDebarredUrl,
+      country: "",
+      entity,
+      licenseRequirement: "Statutory debarment",
+      licenseReviewPolicy: "",
+      federalRegisterCitation,
+      programs: ["DDTC Statutory Debarment"],
+      aliases: [],
+      addresses: [],
+      ids: [],
+      remarks,
+      rawText: [entity, dateOfBirth, federalRegisterCitation, noticeDate, correctedNotice, correctedNoticeDate].join(" "),
+    }];
+  });
+}
+
+function parseDdtcAdministrativeDebarredCsv(csvText, sources) {
+  const source = sources.find((item) => item.letter === "F");
+  const rows = parseCsv(csvText.replace(/^\uFEFF/, ""));
+  const [header, ...dataRows] = rows;
+  if (!header?.length) {
+    return [];
+  }
+
+  const indexes = Object.fromEntries(header.map((name, index) => [name, index]));
+
+  return dataRows.flatMap((row, index) => {
+    const entity = cleanPlainText(row[indexes.Name]);
+    if (!entity) {
+      return [];
+    }
+
+    const date = cleanPlainText(row[indexes.Date]);
+    const chargingLetter = cleanPlainText(row[indexes["Charging Letter"]]);
+    const debarmentOrder = cleanPlainText(row[indexes["Debarment Order"]]);
+    const federalRegisterCitation = cleanPlainText(row[indexes["Federal Register Notice"]]);
+    const remarks = [
+      "Administrative debarment",
+      date ? `Date: ${date}` : "",
+      chargingLetter ? `Charging letter: ${chargingLetter}` : "",
+      debarmentOrder ? `Debarment order: ${debarmentOrder}` : "",
+    ].filter(Boolean).join("; ");
+
+    return [{
+      id: `F-administrative-${index}`,
+      letter: "F",
+      sourceKey: "DEBARRED_PARTIES_LIST",
+      sourceType: "Snapshot",
+      sourceName: source?.name || "Debarred Parties List",
+      citation: source?.citation || "",
+      sourceUrl: SNAPSHOTS.ddtcAdministrativeDebarredUrl,
+      country: "",
+      entity,
+      licenseRequirement: "Administrative debarment",
+      licenseReviewPolicy: "",
+      federalRegisterCitation,
+      programs: ["DDTC Administrative Debarment"],
+      aliases: [],
+      addresses: [],
+      ids: [],
+      remarks,
+      rawText: [entity, date, chargingLetter, debarmentOrder, federalRegisterCitation].join(" "),
     }];
   });
 }

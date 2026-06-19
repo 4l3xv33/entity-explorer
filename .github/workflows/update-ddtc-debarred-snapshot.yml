@@ -1,0 +1,70 @@
+name: Update DDTC debarred snapshots
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 9 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-ddtc-debarred:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download DDTC Debarred Parties CSVs
+        run: |
+          set -euo pipefail
+          mkdir -p data/snapshots
+
+          ARTICLE_API="https://www.pmddtc.state.gov/api/now/sp/page?id=ddtc_kb_article_page&kb_number=KB0010126"
+          ARTICLE_JSON="$(curl --fail --location --silent --show-error "$ARTICLE_API")"
+          ATTACHMENT_IDS="$(
+            printf '%s\n' "$ARTICLE_JSON" |
+            grep -Eo 'sys_attachment\.do\?sys_id(&#61;|=)[0-9a-f]{32}' |
+            sed -E 's/.*(&#61;|=)//' || true
+          )"
+
+          STATUTORY_ID="$(printf '%s\n' "$ATTACHMENT_IDS" | sed -n '1p')"
+          ADMINISTRATIVE_ID="$(printf '%s\n' "$ATTACHMENT_IDS" | sed -n '4p')"
+
+          if [ -z "$STATUTORY_ID" ] || [ -z "$ADMINISTRATIVE_ID" ]; then
+            echo "Could not find both DDTC CSV attachment IDs." >&2
+            exit 1
+          fi
+
+          STATUTORY_URL="https://www.pmddtc.state.gov/sys_attachment.do?sys_id=$STATUTORY_ID"
+          ADMINISTRATIVE_URL="https://www.pmddtc.state.gov/sys_attachment.do?sys_id=$ADMINISTRATIVE_ID"
+
+          curl --fail --location --silent --show-error "$STATUTORY_URL" --output /tmp/ddtc-debarred-statutory.csv
+          curl --fail --location --silent --show-error "$ADMINISTRATIVE_URL" --output /tmp/ddtc-debarred-administrative.csv
+
+          iconv -f ISO-8859-1 -t UTF-8 /tmp/ddtc-debarred-statutory.csv -o data/snapshots/ddtc-debarred-statutory.csv
+          iconv -f ISO-8859-1 -t UTF-8 /tmp/ddtc-debarred-administrative.csv -o data/snapshots/ddtc-debarred-administrative.csv
+
+          {
+            printf 'Statutory CSV: %s\n' "$STATUTORY_URL"
+            printf 'Administrative CSV: %s\n' "$ADMINISTRATIVE_URL"
+          } > data/snapshots/ddtc-debarred-source-urls.txt
+
+      - name: Commit snapshots if changed
+        run: |
+          if git diff --quiet -- \
+            data/snapshots/ddtc-debarred-statutory.csv \
+            data/snapshots/ddtc-debarred-administrative.csv \
+            data/snapshots/ddtc-debarred-source-urls.txt; then
+            echo "No DDTC debarred snapshot changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            data/snapshots/ddtc-debarred-statutory.csv \
+            data/snapshots/ddtc-debarred-administrative.csv \
+            data/snapshots/ddtc-debarred-source-urls.txt
+          git commit -m "Update DDTC debarred snapshots"
+          git push
