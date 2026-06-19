@@ -1,0 +1,52 @@
+name: Update BIS DPL snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  update-dpl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download BIS Denied Persons List CSV
+        run: |
+          set -euo pipefail
+          mkdir -p data/snapshots
+
+          DPL_PAGE="https://www.bis.gov/licensing/end-user-guidance/denied-persons-list-dpl"
+          PAGE_HTML="$(curl --fail --location --silent --show-error "$DPL_PAGE")"
+          CSV_URL="$(
+            printf '%s\n' "$PAGE_HTML" |
+            grep -Eo 'https://media\.bis\.gov/sites/default/files/[^"]*dpl_[0-9]+\.csv' |
+            head -n 1 || true
+          )"
+
+          if [ -z "$CSV_URL" ]; then
+            echo "Could not find the DPL CSV URL on $DPL_PAGE" >&2
+            exit 1
+          fi
+
+          curl --fail --location --silent --show-error \
+            "$CSV_URL" \
+            --output data/snapshots/dpl.csv
+          printf '%s\n' "$CSV_URL" > data/snapshots/dpl-source-url.txt
+
+      - name: Commit snapshot if changed
+        run: |
+          if git diff --quiet -- data/snapshots/dpl.csv data/snapshots/dpl-source-url.txt; then
+            echo "No DPL snapshot changes."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/snapshots/dpl.csv data/snapshots/dpl-source-url.txt
+          git commit -m "Update BIS DPL snapshot"
+          git push

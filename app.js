@@ -12,6 +12,10 @@ const OFAC_API = {
   cmicUrl: "https://sanctionslistservice.ofac.treas.gov/entities?program=CMIC-EO13959",
 };
 
+const SNAPSHOTS = {
+  dplUrl: "data/snapshots/dpl.csv",
+};
+
 const ECFR_SUPPLEMENTS = {
   A: {
     key: "BIS_ENTITY_LIST",
@@ -46,7 +50,15 @@ const OFAC_SOURCES = {
   },
 };
 
-const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS, ...OFAC_SOURCES };
+const SNAPSHOT_SOURCES = {
+  D: {
+    key: "DENIED_PERSONS_LIST",
+    sourceType: "Snapshot",
+    url: SNAPSHOTS.dplUrl,
+  },
+};
+
+const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS, ...OFAC_SOURCES, ...SNAPSHOT_SOURCES };
 
 const state = {
   sources: [],
@@ -56,6 +68,7 @@ const state = {
   loadedAt: null,
   ecfrDate: null,
   ofacApiError: null,
+  snapshotError: null,
   error: null,
 };
 
@@ -78,6 +91,7 @@ async function loadAll() {
   setLoading(true);
   state.error = null;
   state.ofacApiError = null;
+  state.snapshotError = null;
 
   try {
     const [sources, ecfrDate] = await Promise.all([loadSources(), loadEcfrDate()]);
@@ -86,15 +100,19 @@ async function loadAll() {
     renderSources();
     renderFilters();
 
-    const [ecfrRecords, ofacRecords] = await Promise.all([
+    const [ecfrRecords, ofacRecords, snapshotRecords] = await Promise.all([
       loadEcfrRecords(ecfrDate, sources),
       loadOfacApiRecords(sources).catch((error) => {
         state.ofacApiError = error;
         return [];
       }),
+      loadSnapshotRecords(sources).catch((error) => {
+        state.snapshotError = error;
+        return [];
+      }),
     ]);
 
-    state.records = [...ecfrRecords, ...ofacRecords];
+    state.records = [...ecfrRecords, ...ofacRecords, ...snapshotRecords];
     state.loadedAt = new Date();
     updateStatus();
     renderResults();
@@ -141,6 +159,11 @@ async function loadOfacApiRecords(sources) {
     ...parseOfacApiRecords(sdnXml, sources, "C"),
     ...parseOfacApiRecords(cmicXml, sources, "J"),
   ];
+}
+
+async function loadSnapshotRecords(sources) {
+  const dplCsv = await fetchText(SNAPSHOTS.dplUrl);
+  return parseDplCsv(dplCsv, sources);
 }
 
 async function fetchJson(url) {
@@ -275,6 +298,105 @@ function parseOfacApiRecords(xmlText, sources, letter) {
       rawText,
     }];
   });
+}
+
+function parseDplCsv(csvText, sources) {
+  const source = sources.find((item) => item.letter === "D");
+  const rows = parseCsv(csvText.replace(/^\uFEFF/, ""));
+  const [header, ...dataRows] = rows;
+  if (!header?.length) {
+    return [];
+  }
+
+  const indexes = Object.fromEntries(header.map((name, index) => [name, index]));
+
+  return dataRows.flatMap((row, index) => {
+    const entity = cleanPlainText(row[indexes.Name_and_Address]);
+    if (!entity) {
+      return [];
+    }
+
+    const effectiveDate = cleanPlainText(row[indexes.Effective_Date]);
+    const expirationDate = cleanPlainText(row[indexes.Expiration_Date]);
+    const federalRegisterCitation = cleanPlainText(row[indexes["Appropriate Federal Register Citations"]]);
+    const typeOfDenial = cleanPlainText(row[indexes["Type of Denial"]]);
+    const remarks = [
+      effectiveDate ? `Effective: ${effectiveDate}` : "",
+      expirationDate ? `Expires: ${expirationDate}` : "",
+      typeOfDenial ? `Type: ${typeOfDenial}` : "",
+    ].filter(Boolean).join("; ");
+
+    return [{
+      id: `D-${index}`,
+      letter: "D",
+      sourceKey: "DENIED_PERSONS_LIST",
+      sourceType: "Snapshot",
+      sourceName: source?.name || "Denied Persons List",
+      citation: source?.citation || "",
+      sourceUrl: SNAPSHOTS.dplUrl,
+      country: countryFromDplEntity(entity),
+      entity,
+      licenseRequirement: typeOfDenial,
+      licenseReviewPolicy: "",
+      federalRegisterCitation,
+      programs: [],
+      aliases: [],
+      addresses: [],
+      ids: [],
+      remarks,
+      rawText: [entity, effectiveDate, expirationDate, federalRegisterCitation, typeOfDenial].join(" "),
+    }];
+  });
+}
+
+function parseCsv(csvText) {
+  const rows = [];
+  let row = [];
+  let value = "";
+  let quoted = false;
+
+  for (let i = 0; i < csvText.length; i += 1) {
+    const char = csvText[i];
+    const next = csvText[i + 1];
+
+    if (quoted) {
+      if (char === '"' && next === '"') {
+        value += '"';
+        i += 1;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        value += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(value);
+      value = "";
+    } else if (char === "\n") {
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = "";
+    } else if (char !== "\r") {
+      value += char;
+    }
+  }
+
+  if (value || row.length) {
+    row.push(value);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function countryFromDplEntity(entity) {
+  const parts = entity.split(",").map((part) => part.trim()).filter(Boolean);
+  return parts.length >= 2 ? parts[parts.length - 2] : "";
 }
 
 function cleanCellText(cell) {
@@ -440,6 +562,7 @@ function renderSources() {
     const config = LIVE_SOURCES[source.letter];
     const label = config ? `Live ${config.sourceType}` : "Not client-fetchable";
     const badgeClass = config ? "active" : "inactive";
+    const rawUrl = config?.url || source.url;
 
     return `
       <article class="source-card">
@@ -447,7 +570,7 @@ function renderSources() {
         <div class="source-name">${escapeHtml(source.name)}</div>
         <div class="source-actions">
           <span class="badge ${badgeClass}">${label}</span>
-          ${source.url ? `<a class="raw-link" href="${escapeHtml(source.url)}" target="_blank" rel="noopener">raw data</a>` : ""}
+          ${rawUrl ? `<a class="raw-link" href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">raw data</a>` : ""}
         </div>
       </article>
     `;
@@ -563,7 +686,8 @@ function updateStatus() {
   const date = state.ecfrDate || "unknown date";
   const loadedAt = state.loadedAt ? state.loadedAt.toLocaleTimeString() : "now";
   const ofacNote = state.ofacApiError ? " OFAC API data could not be loaded in this browser session." : "";
-  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR and OFAC API sources. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.${ofacNote}`;
+  const snapshotNote = state.snapshotError ? " Snapshot data could not be loaded in this browser session." : "";
+  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR, OFAC API, and local snapshots. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.${ofacNote}${snapshotNote}`;
 }
 
 function setLoading(isLoading) {
