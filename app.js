@@ -7,6 +7,11 @@ const ECFR_PART_744 = {
   },
 };
 
+const OFAC_API = {
+  sdnUrl: "https://sanctionslistservice.ofac.treas.gov/entities?list=SDN%20List",
+  cmicUrl: "https://sanctionslistservice.ofac.treas.gov/entities?program=CMIC-EO13959",
+};
+
 const ECFR_SUPPLEMENTS = {
   A: {
     key: "BIS_ENTITY_LIST",
@@ -28,7 +33,20 @@ const ECFR_SUPPLEMENTS = {
   },
 };
 
-const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS };
+const OFAC_SOURCES = {
+  C: {
+    key: "OFAC_SDN_LIST",
+    sourceType: "OFAC API",
+    url: OFAC_API.sdnUrl,
+  },
+  J: {
+    key: "EO_14032_ANNEX",
+    sourceType: "OFAC API",
+    url: OFAC_API.cmicUrl,
+  },
+};
+
+const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS, ...OFAC_SOURCES };
 
 const state = {
   sources: [],
@@ -37,6 +55,7 @@ const state = {
   records: [],
   loadedAt: null,
   ecfrDate: null,
+  ofacApiError: null,
   error: null,
 };
 
@@ -58,6 +77,7 @@ loadAll();
 async function loadAll() {
   setLoading(true);
   state.error = null;
+  state.ofacApiError = null;
 
   try {
     const [sources, ecfrDate] = await Promise.all([loadSources(), loadEcfrDate()]);
@@ -66,7 +86,15 @@ async function loadAll() {
     renderSources();
     renderFilters();
 
-    state.records = await loadEcfrRecords(ecfrDate, sources);
+    const [ecfrRecords, ofacRecords] = await Promise.all([
+      loadEcfrRecords(ecfrDate, sources),
+      loadOfacApiRecords(sources).catch((error) => {
+        state.ofacApiError = error;
+        return [];
+      }),
+    ]);
+
+    state.records = [...ecfrRecords, ...ofacRecords];
     state.loadedAt = new Date();
     updateStatus();
     renderResults();
@@ -101,6 +129,18 @@ async function loadEcfrDate() {
 async function loadEcfrRecords(ecfrDate, sources) {
   const xmlText = await fetchText(ECFR_PART_744.xmlUrl(ecfrDate));
   return parseEcfrRecords(xmlText, sources);
+}
+
+async function loadOfacApiRecords(sources) {
+  const [sdnXml, cmicXml] = await Promise.all([
+    fetchText(OFAC_API.sdnUrl),
+    fetchText(OFAC_API.cmicUrl),
+  ]);
+
+  return [
+    ...parseOfacApiRecords(sdnXml, sources, "C"),
+    ...parseOfacApiRecords(cmicXml, sources, "J"),
+  ];
 }
 
 async function fetchJson(url) {
@@ -178,6 +218,65 @@ function parseEcfrRecords(xmlText, sources) {
   });
 }
 
+function parseOfacApiRecords(xmlText, sources, letter) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, "application/xml");
+  const parserError = doc.querySelector("parsererror");
+  if (parserError) {
+    throw new Error("OFAC API returned XML that could not be parsed.");
+  }
+
+  const config = OFAC_SOURCES[letter];
+  const source = sources.find((item) => item.letter === letter);
+  const entitiesContainer = firstByTag(doc, "entities");
+  const entities = entitiesContainer ? directChildrenByTag(entitiesContainer, "entity") : [];
+
+  return entities.flatMap((entityElement) => {
+    const entity = primaryOfacName(entityElement);
+    if (!entity) {
+      return [];
+    }
+
+    const programs = childTextsFromContainer(entityElement, "sanctionsPrograms", "sanctionsProgram");
+    const sanctionsLists = childTextsFromContainer(entityElement, "sanctionsLists", "sanctionsList");
+    const aliases = ofacAliases(entityElement);
+    const addresses = ofacAddresses(entityElement);
+    const ids = ofacIdentityDocuments(entityElement);
+    const features = ofacFeatures(entityElement);
+    const country = ofacCountry(entityElement);
+    const rawText = [
+      entity,
+      programs.join(" "),
+      sanctionsLists.join(" "),
+      aliases.join(" "),
+      addresses.join(" "),
+      ids.join(" "),
+      features.join(" "),
+    ].join(" ");
+
+    return [{
+      id: `${letter}-${entityElement.getAttribute("id") || entity}`,
+      letter,
+      sourceKey: config.key,
+      sourceType: config.sourceType,
+      sourceName: source?.name || config.key,
+      citation: source?.citation || "",
+      sourceUrl: config.url,
+      country,
+      entity,
+      licenseRequirement: "",
+      licenseReviewPolicy: "",
+      federalRegisterCitation: "",
+      programs: [...sanctionsLists, ...programs],
+      aliases,
+      addresses,
+      ids,
+      remarks: features.join("; "),
+      rawText,
+    }];
+  });
+}
+
 function cleanCellText(cell) {
   return Array.from(cell.childNodes)
     .map(nodeText)
@@ -200,6 +299,140 @@ function nodeText(node) {
   }
 
   return Array.from(node.childNodes).map(nodeText).join(" ");
+}
+
+function firstByTag(root, tagName) {
+  return root.getElementsByTagNameNS("*", tagName)[0] || null;
+}
+
+function directChildByTag(element, tagName) {
+  return directChildrenByTag(element, tagName)[0] || null;
+}
+
+function directChildrenByTag(element, tagName) {
+  return Array.from(element.children).filter((child) => child.localName === tagName);
+}
+
+function cleanPlainText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function directText(element, tagName) {
+  const child = directChildByTag(element, tagName);
+  return child ? cleanPlainText(child.textContent) : "";
+}
+
+function childTextsFromContainer(element, containerTag, childTag) {
+  const container = directChildByTag(element, containerTag);
+  if (!container) {
+    return [];
+  }
+
+  return directChildrenByTag(container, childTag)
+    .map((child) => cleanPlainText(child.textContent))
+    .filter(Boolean);
+}
+
+function primaryOfacName(entityElement) {
+  const names = directChildByTag(entityElement, "names");
+  if (!names) {
+    return "";
+  }
+
+  const nameElements = directChildrenByTag(names, "name");
+  const primary = nameElements.find((name) => directText(name, "isPrimary") === "true") || nameElements[0];
+  return primary ? ofacNameText(primary) : "";
+}
+
+function ofacAliases(entityElement) {
+  const names = directChildByTag(entityElement, "names");
+  if (!names) {
+    return [];
+  }
+
+  return directChildrenByTag(names, "name")
+    .filter((name) => directText(name, "isPrimary") !== "true")
+    .map(ofacNameText)
+    .filter(Boolean);
+}
+
+function ofacNameText(nameElement) {
+  const translations = firstByTag(nameElement, "translations");
+  if (!translations) {
+    return "";
+  }
+
+  const translationElements = directChildrenByTag(translations, "translation");
+  const primary = translationElements.find((translation) => directText(translation, "isPrimary") === "true") || translationElements[0];
+  return primary ? cleanPlainText(firstByTag(primary, "formattedFullName")?.textContent) : "";
+}
+
+function ofacAddresses(entityElement) {
+  const addresses = directChildByTag(entityElement, "addresses");
+  if (!addresses) {
+    return [];
+  }
+
+  return directChildrenByTag(addresses, "address").map((address) => {
+    const country = directText(address, "country");
+    const parts = Array.from(address.getElementsByTagNameNS("*", "addressPart"))
+      .map((part) => cleanPlainText(firstByTag(part, "value")?.textContent))
+      .filter(Boolean);
+
+    if (country) {
+      parts.push(country);
+    }
+
+    return parts.join(", ");
+  }).filter(Boolean);
+}
+
+function ofacIdentityDocuments(entityElement) {
+  const documents = directChildByTag(entityElement, "identityDocuments");
+  if (!documents) {
+    return [];
+  }
+
+  return directChildrenByTag(documents, "identityDocument").map((document) => {
+    const type = directText(document, "type");
+    const number = directText(document, "documentNumber");
+    const country = directText(document, "issuingCountry");
+    return [type, number, country].filter(Boolean).join(": ");
+  }).filter(Boolean);
+}
+
+function ofacFeatures(entityElement) {
+  const features = directChildByTag(entityElement, "features");
+  if (!features) {
+    return [];
+  }
+
+  return directChildrenByTag(features, "feature").map((feature) => {
+    const type = directText(feature, "type");
+    const value = directText(feature, "value");
+    return [type, value].filter(Boolean).join(": ");
+  }).filter(Boolean);
+}
+
+function ofacCountry(entityElement) {
+  const addresses = directChildByTag(entityElement, "addresses");
+  if (addresses) {
+    const country = directChildrenByTag(addresses, "address")
+      .map((address) => directText(address, "country"))
+      .find(Boolean);
+    if (country) {
+      return country;
+    }
+  }
+
+  const documents = directChildByTag(entityElement, "identityDocuments");
+  if (!documents) {
+    return "";
+  }
+
+  return directChildrenByTag(documents, "identityDocument")
+    .map((document) => directText(document, "issuingCountry"))
+    .find(Boolean) || "";
 }
 
 function renderSources() {
@@ -329,7 +562,8 @@ function renderField(label, value) {
 function updateStatus() {
   const date = state.ecfrDate || "unknown date";
   const loadedAt = state.loadedAt ? state.loadedAt.toLocaleTimeString() : "now";
-  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.`;
+  const ofacNote = state.ofacApiError ? " OFAC API data could not be loaded in this browser session." : "";
+  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR and OFAC API sources. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.${ofacNote}`;
 }
 
 function setLoading(isLoading) {

@@ -19,7 +19,7 @@
       "citation": "SIRA \u00a7 2(e)(3)(C)",
       "name": "OFAC SDN List",
       "statutory_text": "The Department of the Treasury Office of Foreign Assets Control Specially Designated Nationals List.",
-      "url": "https://sanctionssearch.ofac.treas.gov/"
+      "url": "https://sanctionslistservice.ofac.treas.gov/entities?list=SDN%20List"
     },
     {
       "letter": "D",
@@ -70,7 +70,7 @@
       "citation": "SIRA \u00a7 2(e)(3)(J)",
       "name": "EO 14032 Annex",
       "statutory_text": "The Annex to Executive Order (EO) 14032, 'Addressing the Threat from Securities Investments That Finance Certain Companies of the People's Republic of China,' dated June 3, 2021, or superseding Executive Order.",
-      "url": "https://ofac.treasury.gov/sanctions-programs-and-country-information/chinese-military-industrial-complex-sanctions"
+      "url": "https://sanctionslistservice.ofac.treas.gov/entities?program=CMIC-EO13959"
     },
     {
       "letter": "K",

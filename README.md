@@ -10,7 +10,7 @@ This app has no backend and no build step.
 
 - `index.html` loads the page.
 - `app.js` loads `data.json`.
-- The browser fetches public XML directly from eCFR.
+- The browser fetches public XML directly from eCFR and OFAC's Sanctions List Service API.
 - The browser parses the XML and searches records in memory.
 
 All search happens in memory in the browser.
@@ -30,6 +30,19 @@ The app uses eCFR where the list data is actually published inside Title 15, Par
   - B: `Supplement No. 7 to Part 744`, BIS Military End User List
   - L: `Supplement No. 6 to Part 744`, Unverified List
 
+### OFAC Sanctions List Service API
+
+The app uses OFAC's documented Sanctions List Service API for browser-fetchable entity XML.
+
+- API documentation:
+  `https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/APIDocumentation.docx`
+- C: OFAC SDN List:
+  `https://sanctionslistservice.ofac.treas.gov/entities?list=SDN%20List`
+- J: EO 14032 / Chinese Military-Industrial Complex sanctions:
+  `https://sanctionslistservice.ofac.treas.gov/entities?program=CMIC-EO13959`
+
+The OFAC API response includes a warning that this data may include historical list data and should not be used as the official active list for transaction screening. Entity Explorer uses this API for search and discovery; use OFAC's official list publications for authoritative screening.
+
 ## What This Can and Cannot Do
 
 This static app can use sources that meet both conditions:
@@ -41,18 +54,18 @@ Currently supported:
 
 - A: BIS Entity List
 - B: BIS Military End User List
+- C: OFAC SDN List
+- J: EO 14032 / CMIC sanctions from OFAC Sanctions List Service API
 - L: Unverified List
 
 Currently not supported client-side:
 
-- C: OFAC SDN List
 - D: Denied Persons List
 - E: Chinese Military Companies List
 - F: Debarred Parties List
 - G: PRC Telecommunications Companies List
 - H: Military-Civil Fusion Affiliated Institutions List
 - I: PRC Semiconductor Companies List
-- J: EO 14032 / CMIC sanctions from OFAC consolidated XML
 - K: FCC Covered List
 - M: UFLPA Entity List
 - N: Biotechnology Company of Concern List
@@ -60,7 +73,7 @@ Currently not supported client-side:
 
 Those may require a backend fetcher, a generated static data snapshot, PDF parsing, portal-specific handling, or a source-specific API that is not currently wired into this app.
 
-## OFAC Observation
+## OFAC Observations
 
 OFAC does publish machine-readable XML downloads for the SDN List and consolidated sanctions data:
 
@@ -69,7 +82,9 @@ OFAC does publish machine-readable XML downloads for the SDN List and consolidat
 
 An attempted browser-only integration was retracted because the OFAC download path redirects through `sanctionslistservice.ofac.treas.gov` to signed S3 URLs. That can work from command-line tools, but it is not reliable from GitHub Pages because browser `fetch()` enforces CORS across the redirect chain.
 
-The likely future approach for OFAC is to use a scheduled GitHub Action to download the XML files into this repository, then have the static app read those checked-in snapshots locally.
+The documented Sanctions List Service `/entities` API is different from those download URLs and is currently used by the app. It sends browser-accessible CORS headers, but its response includes OFAC's historical-data warning and the SDN endpoint is large, so it can take time to load.
+
+If the browser-only API path becomes unreliable, the fallback approach is to use a scheduled GitHub Action to download OFAC XML into this repository, then have the static app read those checked-in snapshots locally.
 
 ## GitHub Pages
 
@@ -89,6 +104,6 @@ Then enable GitHub Pages for the repository:
 
 ## Notes
 
-The app marks supported sources as `Live eCFR`. The other sources remain visible but are marked `Not client-fetchable` because they are not currently wired to a browser-fetchable machine-readable source.
+The app marks supported sources as `Live eCFR` or `Live OFAC API`. The other sources remain visible but are marked `Not client-fetchable` because they are not currently wired to a browser-fetchable machine-readable source.
 
 Opening `index.html` directly from disk may fail in some browsers because `fetch("data.json")` is restricted under `file://`. GitHub Pages works because it serves the files over HTTPS.
