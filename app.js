@@ -82,7 +82,31 @@ const SNAPSHOT_SOURCES = {
   },
 };
 
-const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS, ...OFAC_SOURCES, ...SNAPSHOT_SOURCES };
+const STATUTORY_SOURCES = {
+  I: {
+    key: "PRC_SEMICONDUCTOR_COMPANIES_LIST",
+    sourceType: "Statutory",
+  },
+};
+
+const STATUTORY_RECORDS = {
+  I: [
+    {
+      entity: "Semiconductor Manufacturing International Corporation",
+      aliases: ["SMIC"],
+    },
+    {
+      entity: "Yangtze Memory Technologies Corporation",
+      aliases: ["YMTC"],
+    },
+    {
+      entity: "ChangXin Memory Technologies",
+      aliases: ["CXMT"],
+    },
+  ],
+};
+
+const LIVE_SOURCES = { ...ECFR_SUPPLEMENTS, ...OFAC_SOURCES, ...SNAPSHOT_SOURCES, ...STATUTORY_SOURCES };
 
 const state = {
   sources: [],
@@ -124,7 +148,7 @@ async function loadAll() {
     renderSources();
     renderFilters();
 
-    const [ecfrRecords, ofacRecords, snapshotRecords] = await Promise.all([
+    const [ecfrRecords, ofacRecords, snapshotRecords, statutoryRecords] = await Promise.all([
       loadEcfrRecords(ecfrDate, sources),
       loadOfacApiRecords(sources).catch((error) => {
         state.ofacApiError = error;
@@ -134,9 +158,10 @@ async function loadAll() {
         state.snapshotError = error;
         return [];
       }),
+      Promise.resolve(loadStatutoryRecords(sources)),
     ]);
 
-    state.records = [...ecfrRecords, ...ofacRecords, ...snapshotRecords];
+    state.records = [...ecfrRecords, ...ofacRecords, ...snapshotRecords, ...statutoryRecords];
     state.loadedAt = new Date();
     updateStatus();
     renderResults();
@@ -204,6 +229,34 @@ async function loadSnapshotSource(url, parseRecords) {
     state.snapshotError = error;
     return [];
   }
+}
+
+function loadStatutoryRecords(sources) {
+  return Object.entries(STATUTORY_RECORDS).flatMap(([letter, records]) => {
+    const config = STATUTORY_SOURCES[letter];
+    const source = sources.find((item) => item.letter === letter);
+
+    return records.map((record, index) => ({
+      id: `${letter}-${index}`,
+      letter,
+      sourceKey: config.key,
+      sourceType: config.sourceType,
+      sourceName: source?.name || config.key,
+      citation: source?.citation || "",
+      sourceUrl: source?.url || "",
+      country: "China",
+      entity: record.entity,
+      licenseRequirement: "",
+      licenseReviewPolicy: "",
+      federalRegisterCitation: "",
+      programs: ["Section 5949"],
+      aliases: record.aliases || [],
+      addresses: [],
+      ids: [],
+      remarks: "Initial company identified by statute; no agency-maintained dynamic feed is currently wired.",
+      rawText: [record.entity, record.aliases?.join(" "), source?.statutory_text].join(" "),
+    }));
+  });
 }
 
 async function fetchJson(url) {
@@ -840,7 +893,7 @@ function renderSources() {
     .filter((source) => source.letter !== "O")
     .map((source) => {
       const config = LIVE_SOURCES[source.letter];
-      const label = config ? `Live ${config.sourceType}` : "Not client-fetchable";
+      const label = sourceLabel(config);
       const badgeClass = config ? "active" : "inactive";
       const rawUrl = config?.url || source.url;
 
@@ -855,6 +908,14 @@ function renderSources() {
         </article>
       `;
     }).join("");
+}
+
+function sourceLabel(config) {
+  if (!config) {
+    return "Not client-fetchable";
+  }
+
+  return config.sourceType === "Statutory" ? "Statutory" : `Live ${config.sourceType}`;
 }
 
 function renderFilters() {
@@ -967,7 +1028,7 @@ function updateStatus() {
   const loadedAt = state.loadedAt ? state.loadedAt.toLocaleTimeString() : "now";
   const ofacNote = state.ofacApiError ? " OFAC API data could not be loaded in this browser session." : "";
   const snapshotNote = state.snapshotError ? " Snapshot data could not be loaded in this browser session." : "";
-  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR, OFAC API, and local snapshots. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.${ofacNote}${snapshotNote}`;
+  els.statusText.textContent = `Loaded ${state.records.length.toLocaleString()} records from eCFR, OFAC API, local snapshots, and statutory seeds. eCFR Title 15 is current as of ${date}. Last refreshed ${loadedAt}.${ofacNote}${snapshotNote}`;
 }
 
 function setLoading(isLoading) {
