@@ -17,6 +17,7 @@ const SNAPSHOTS = {
   ddtcStatutoryDebarredUrl: "data/snapshots/ddtc-debarred-statutory.csv",
   ddtcAdministrativeDebarredUrl: "data/snapshots/ddtc-debarred-administrative.csv",
   fccCoveredListUrl: "data/snapshots/fcc-coveredlist.html",
+  dhsUflpaEntityListUrl: "data/snapshots/dhs-uflpa-entity-list.html",
 };
 
 const ECFR_SUPPLEMENTS = {
@@ -68,6 +69,11 @@ const SNAPSHOT_SOURCES = {
     key: "PRC_TELECOMMUNICATIONS_COMPANIES_LIST",
     sourceType: "Snapshot",
     url: SNAPSHOTS.fccCoveredListUrl,
+  },
+  M: {
+    key: "UFLPA_ENTITY_LIST",
+    sourceType: "Snapshot",
+    url: SNAPSHOTS.dhsUflpaEntityListUrl,
   },
 };
 
@@ -175,14 +181,15 @@ async function loadOfacApiRecords(sources) {
 }
 
 async function loadSnapshotRecords(sources) {
-  const [dplRecords, statutoryDebarredRecords, administrativeDebarredRecords, fccCoveredRecords] = await Promise.all([
+  const [dplRecords, statutoryDebarredRecords, administrativeDebarredRecords, fccCoveredRecords, uflpaRecords] = await Promise.all([
     loadSnapshotSource(SNAPSHOTS.dplUrl, (csvText) => parseDplCsv(csvText, sources)),
     loadSnapshotSource(SNAPSHOTS.ddtcStatutoryDebarredUrl, (csvText) => parseDdtcStatutoryDebarredCsv(csvText, sources)),
     loadSnapshotSource(SNAPSHOTS.ddtcAdministrativeDebarredUrl, (csvText) => parseDdtcAdministrativeDebarredCsv(csvText, sources)),
     loadSnapshotSource(SNAPSHOTS.fccCoveredListUrl, (htmlText) => parseFccCoveredListHtml(htmlText, sources)),
+    loadSnapshotSource(SNAPSHOTS.dhsUflpaEntityListUrl, (htmlText) => parseDhsUflpaEntityListHtml(htmlText, sources)),
   ]);
 
-  return [...dplRecords, ...statutoryDebarredRecords, ...administrativeDebarredRecords, ...fccCoveredRecords];
+  return [...dplRecords, ...statutoryDebarredRecords, ...administrativeDebarredRecords, ...fccCoveredRecords, ...uflpaRecords];
 }
 
 async function loadSnapshotSource(url, parseRecords) {
@@ -526,6 +533,50 @@ function parseFccCoveredListHtml(htmlText, sources) {
   });
 }
 
+function parseDhsUflpaEntityListHtml(htmlText, sources) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlText, "text/html");
+  const source = sources.find((item) => item.letter === "M");
+  const tables = Array.from(doc.querySelectorAll(".field--name-body table"));
+
+  return tables.flatMap((table, tableIndex) => {
+    const section = previousSectionLabel(table);
+    return Array.from(table.querySelectorAll("tbody tr")).flatMap((row, rowIndex) => {
+      const cells = Array.from(row.children).filter((cell) => cell.tagName === "TD");
+      if (cells.length < 2) {
+        return [];
+      }
+
+      const entity = cleanCellText(cells[0]);
+      const effectiveDate = cleanCellText(cells[1]);
+      if (!entity) {
+        return [];
+      }
+
+      return [{
+        id: `M-${tableIndex}-${rowIndex}`,
+        letter: "M",
+        sourceKey: "UFLPA_ENTITY_LIST",
+        sourceType: "Snapshot",
+        sourceName: source?.name || "UFLPA Entity List",
+        citation: source?.citation || "",
+        sourceUrl: SNAPSHOTS.dhsUflpaEntityListUrl,
+        country: "China",
+        entity,
+        licenseRequirement: "",
+        licenseReviewPolicy: "",
+        federalRegisterCitation: "",
+        programs: ["UFLPA Entity List"],
+        aliases: [],
+        addresses: [],
+        ids: [],
+        remarks: [section, effectiveDate ? `Effective: ${effectiveDate}` : ""].filter(Boolean).join("; "),
+        rawText: [entity, section, effectiveDate].join(" "),
+      }];
+    });
+  });
+}
+
 function fccCoveredEntityName(cell, description) {
   const namedEntities = Array.from(cell.querySelectorAll("strong"))
     .map(cleanCellText)
@@ -538,6 +589,20 @@ function fccCoveredEntityName(cell, description) {
     .split(/\s+(?:produced|provided|supplied)\s+(?:by|in)\s+| —| - /)[0]
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function previousSectionLabel(element) {
+  let current = element.previousElementSibling;
+  while (current) {
+    if (current.tagName === "P") {
+      const label = cleanCellText(current);
+      if (label) {
+        return label;
+      }
+    }
+    current = current.previousElementSibling;
+  }
+  return "";
 }
 
 function nextElementByTag(element, tagName) {
