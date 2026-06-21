@@ -70,6 +70,11 @@ const SNAPSHOT_SOURCES = {
     sourceType: "Snapshot",
     url: SNAPSHOTS.fccCoveredListUrl,
   },
+  K: {
+    key: "FCC_COVERED_LIST",
+    sourceType: "Snapshot",
+    url: SNAPSHOTS.fccCoveredListUrl,
+  },
   M: {
     key: "UFLPA_ENTITY_LIST",
     sourceType: "Snapshot",
@@ -489,7 +494,6 @@ function parseDdtcAdministrativeDebarredCsv(csvText, sources) {
 function parseFccCoveredListHtml(htmlText, sources) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlText, "text/html");
-  const source = sources.find((item) => item.letter === "G");
   const heading = Array.from(doc.querySelectorAll("h3"))
     .find((item) => cleanPlainText(item.textContent) === "Covered List");
   const table = heading ? nextElementByTag(heading, "TABLE") : doc.querySelector(".page__body table");
@@ -497,7 +501,7 @@ function parseFccCoveredListHtml(htmlText, sources) {
     return [];
   }
 
-  return Array.from(table.querySelectorAll("tbody tr")).flatMap((row, index) => {
+  const coveredRows = Array.from(table.querySelectorAll("tbody tr")).flatMap((row, index) => {
     const cells = Array.from(row.children).filter((cell) => cell.tagName === "TD");
     if (cells.length < 2) {
       return [];
@@ -510,16 +514,23 @@ function parseFccCoveredListHtml(htmlText, sources) {
       return [];
     }
 
-    return [{
-      id: `G-${index}`,
-      letter: "G",
-      sourceKey: "PRC_TELECOMMUNICATIONS_COMPANIES_LIST",
+    return [{ index, entity, description, dateOfInclusion }];
+  });
+
+  return ["G", "K"].flatMap((letter) => {
+    const source = sources.find((item) => item.letter === letter);
+    const config = SNAPSHOT_SOURCES[letter];
+
+    return coveredRows.map((row) => ({
+      id: `${letter}-${row.index}`,
+      letter,
+      sourceKey: config.key,
       sourceType: "Snapshot",
-      sourceName: source?.name || "PRC Telecommunications Companies List",
+      sourceName: source?.name || config.key,
       citation: source?.citation || "",
       sourceUrl: SNAPSHOTS.fccCoveredListUrl,
       country: "",
-      entity,
+      entity: row.entity,
       licenseRequirement: "",
       licenseReviewPolicy: "",
       federalRegisterCitation: "",
@@ -527,9 +538,9 @@ function parseFccCoveredListHtml(htmlText, sources) {
       aliases: [],
       addresses: [],
       ids: [],
-      remarks: dateOfInclusion ? `Date of inclusion: ${dateOfInclusion}` : "",
-      rawText: [entity, description, dateOfInclusion].join(" "),
-    }];
+      remarks: row.dateOfInclusion ? `Date of inclusion: ${row.dateOfInclusion}` : "",
+      rawText: [row.entity, row.description, row.dateOfInclusion].join(" "),
+    }));
   });
 }
 

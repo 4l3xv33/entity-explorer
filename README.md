@@ -53,7 +53,7 @@ Some useful government files are machine-readable but not reliably browser-fetch
 - F: DDTC Debarred Parties List:
   `data/snapshots/ddtc-debarred-statutory.csv`
   `data/snapshots/ddtc-debarred-administrative.csv`
-- G: FCC Covered List table:
+- G/K: FCC Covered List table:
   `data/snapshots/fcc-coveredlist.html`
 - M: DHS UFLPA Entity List tables:
   `data/snapshots/dhs-uflpa-entity-list.html`
@@ -97,6 +97,7 @@ Currently supported:
 - F: DDTC Debarred Parties List from local CSV snapshots
 - G: PRC Telecommunications Companies List from FCC Covered List HTML snapshot
 - J: EO 14032 / CMIC sanctions from OFAC Sanctions List Service API
+- K: FCC Covered List from FCC Covered List HTML snapshot
 - L: Unverified List
 - M: UFLPA Entity List from DHS HTML table snapshot
 
@@ -105,7 +106,6 @@ Currently not supported client-side:
 - E: Chinese Military Companies List
 - H: Military-Civil Fusion Affiliated Institutions List
 - I: PRC Semiconductor Companies List
-- K: FCC Covered List
 - N: Biotechnology Company of Concern List
 
 Those may require a backend fetcher, a generated static data snapshot, PDF parsing, portal-specific handling, or a source-specific API that is not currently wired into this app.
@@ -153,7 +153,7 @@ The useful data is published as a static HTML table headed `Covered List`. This 
 
 The local `curl` command can be unreliable against this FCC page, but Node's built-in `fetch()` retrieved the HTML successfully. The GitHub Action uses that Node fetch path rather than curl.
 
-The table is broader than only PRC telecommunications companies because it is the FCC Covered List page. Entity Explorer currently wires it to SIRA § 2(e)(3)(G) because that item points to this FCC page in `data.json`; SIRA § 2(e)(3)(K) also points to the same FCC Covered List and can reuse the same snapshot later.
+The table is broader than only PRC telecommunications companies because it is the FCC Covered List page. Entity Explorer wires the same snapshot to both SIRA § 2(e)(3)(G) and SIRA § 2(e)(3)(K), because both items point to this FCC page in `data.json`.
 
 ## DHS UFLPA Entity List Observation
 
