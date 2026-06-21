@@ -760,23 +760,25 @@ function ofacCountry(entityElement) {
 }
 
 function renderSources() {
-  els.sourceList.innerHTML = state.sources.map((source) => {
-    const config = LIVE_SOURCES[source.letter];
-    const label = config ? `Live ${config.sourceType}` : "Not client-fetchable";
-    const badgeClass = config ? "active" : "inactive";
-    const rawUrl = config?.url || source.url;
+  els.sourceList.innerHTML = state.sources
+    .filter((source) => source.letter !== "O")
+    .map((source) => {
+      const config = LIVE_SOURCES[source.letter];
+      const label = config ? `Live ${config.sourceType}` : "Not client-fetchable";
+      const badgeClass = config ? "active" : "inactive";
+      const rawUrl = config?.url || source.url;
 
-    return `
-      <article class="source-card">
-        <div class="source-citation">${escapeHtml(source.citation)}</div>
-        <div class="source-name">${escapeHtml(source.name)}</div>
-        <div class="source-actions">
-          <span class="badge ${badgeClass}">${label}</span>
-          ${rawUrl ? `<a class="raw-link" href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">raw data</a>` : ""}
-        </div>
-      </article>
-    `;
-  }).join("");
+      return `
+        <article class="source-card">
+          <div class="source-citation">${escapeHtml(source.citation)}</div>
+          <div class="source-name">${escapeHtml(source.name)}</div>
+          <div class="source-actions">
+            <span class="badge ${badgeClass}">${label}</span>
+            ${rawUrl ? `<a class="raw-link" href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">raw data</a>` : ""}
+          </div>
+        </article>
+      `;
+    }).join("");
 }
 
 function renderFilters() {

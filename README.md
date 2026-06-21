@@ -100,9 +100,10 @@ Currently not supported client-side:
 - K: FCC Covered List
 - M: UFLPA Entity List
 - N: Biotechnology Company of Concern List
-- O: Catch-all provision
 
 Those may require a backend fetcher, a generated static data snapshot, PDF parsing, portal-specific handling, or a source-specific API that is not currently wired into this app.
+
+SIRA § 2(e)(3)(O) is a catch-all provision rather than a concrete restricted entity list, so Entity Explorer keeps it in `data.json` for statutory completeness but omits it from the source list in the UI.
 
 ## BIS Denied Persons List Observation
 
